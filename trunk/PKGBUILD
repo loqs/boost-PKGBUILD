@@ -10,26 +10,25 @@
 
 pkgbase=boost
 pkgname=('boost-libs' 'boost')
-pkgver=1.75.0
+pkgver=1.76.0
 _boostver=${pkgver//./_}
-pkgrel=3
+pkgrel=1
 pkgdesc='Free peer-reviewed portable C++ source libraries'
 url='https://www.boost.org/'
 arch=('x86_64')
 license=('custom')
-makedepends=('icu' 'python' 'python-numpy' 'bzip2' 'zlib' 'openmpi' 'zstd' 'findutils')
-source=(https://dl.bintray.com/boostorg/release/${pkgver}/source/boost_${_boostver}.tar.bz2
-        ${pkgbase}-ublas-c++20-iterator.patch::https://github.com/boostorg/ublas/commit/a31e5cffa85f.patch)
-sha256sums=('953db31e016db7bb207f11432bef7df100516eeb746843fa0486a222e3fd49cb'
-            'aa38addb40d5f44b4a8472029b475e7e6aef1c460509eb7d8edf03491dc1b5ee')
-b2sums=('ce7ecd8bcee518ce54f7e5302f202acbea60cedd6ae9248708c0bb5bbc2713607b2e1967a9e6f77cc20a4c008c1ee4db651def55937efc80407487a7a44fa8d6'
-        'e5f6d4884eaa557d5547e7e079c2edb4ed9f2f4cd8579aa32a2150f824a5d04413f2a91e79b3139d5b915da6a46f7835f1438ad53f33096973f1a99f378ec1d3')
+makedepends=('icu' 'python' 'python-numpy' 'bzip2' 'zlib' 'openmpi' 'zstd' 'findutils' 'boost.build')
+source=(https://boostorg.jfrog.io/artifactory/main/release/${pkgver}/source/boost_${_boostver}.tar.bz2
+        boost-1.76.0-no-sourcedir.patch)
+sha256sums=('f0397ba6e982c4450f27bf32a2a83292aba035b827a5623a14636ea583318c41'
+            '3cfd08adfde94be947452c7d9e350553f57692f435a89ac3dac90e38257fc909')
+b2sums=('45445e6a9725cb99131e0b831b2fac0840d083692c13887b41adeac5cb8b3732026db3641d6be20591a676b78a87fcf363eb9b1508f87ed26039bba6a1ced533'
+        '5e1221903960fe4e89bef0f3708167ec7630b0ac3703a7a534b33fac57b734ee8b49ee4c046221db61a13ae1d24ad4c6d20e95bfdfda32bb87cf200914ba15c3')
 
 prepare() {
    cd ${pkgbase}_${_boostver}
-
-   # https://github.com/boostorg/ublas/pull/97
-   patch -Np2 -i ../${pkgbase}-ublas-c++20-iterator.patch
+   patch -p1 -i ../boost-1.76.0-no-sourcedir.patch
+   rm boost-build.jam #This adds in local jamfiles which are used in preference to the system supplied ones which has been patched to apply $LDFLAGS earlier
 }
 
 build() {
@@ -41,9 +40,8 @@ build() {
    ./bootstrap.sh \
      --with-toolset=gcc \
      --with-icu \
-     --with-python=/usr/bin/python3 \
-
-   install -Dm755 tools/build/src/engine/b2 "${_stagedir}"/bin/b2
+     --with-python=/usr/bin/python3  \
+     --with-bjam=b2
 
    # Support for OpenMPI
    echo "using mpi ;" >> project-config.jam
@@ -58,7 +56,7 @@ build() {
    # and installs includes in /usr/include/boost.
    # --layout=system no longer adds the -mt suffix for multi-threaded libs.
    # install to ${_stagedir} in preparation for split packaging
-   "${_stagedir}"/bin/b2 \
+   b2 \
       variant=release \
       debug-symbols=off \
       threading=multi \
@@ -67,7 +65,7 @@ build() {
       toolset=gcc \
       python=3.9 \
       cflags="${CPPFLAGS} ${CFLAGS} -fPIC -O3" \
-      cxxflags="${CPPFLAGS} ${CXXFLAGS} -std=c++14 -fPIC -O3" \
+      cxxflags="${CPPFLAGS} ${CXXFLAGS} -std=c++17 -fPIC -O3" \
       linkflags="${LDFLAGS}" \
       --layout=system \
       ${JOBS} \
@@ -83,7 +81,7 @@ package_boost() {
    options=('staticlibs')
 
    install -dm755 "${pkgdir}"/usr
-   cp -a "${_stagedir}"/{bin,include,share} "${pkgdir}"/usr
+   cp -a "${_stagedir}"/{include,share} "${pkgdir}"/usr
 
    install -d "${pkgdir}"/usr/lib
    cp -a "${_stagedir}"/lib/*.a "${pkgdir}"/usr/lib/
@@ -91,8 +89,6 @@ package_boost() {
 
    install -Dm644 "${srcdir}/"${pkgbase}_${_boostver}/LICENSE_1_0.txt \
       "${pkgdir}"/usr/share/licenses/boost/LICENSE_1_0.txt
-
-   ln -s /usr/bin/b2 "$pkgdir"/usr/bin/bjam
 }
 
 package_boost-libs() {
